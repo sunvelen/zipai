@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能皮肤分析系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- 登录/注册表单 -->
+        <div v-if="!isLoggedIn" class="auth-form">
+            <h2>[[ isLogin ? '登录' : '注册' ]]</h2>
+            <form @submit.prevent="handleAuth">
+                <div v-if="!isLogin" class="form-group">
+                    <label>用户名</label>
+                    <input type="text" v-model="authForm.username" required>
+                </div>
+                <div class="form-group">
+                    <label>邮箱</label>
+                    <input type="email" v-model="authForm.email" required>
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" v-model="authForm.password" required>
+                </div>
+                <button type="submit">[[ isLogin ? '登录' : '注册' ]]</button>
+                <p class="switch-form">
+                    [[ isLogin ? '还没有账号？' : '已有账号？' ]]
+                    <a href="#" @click.prevent="isLogin = !isLogin">
+                        [[ isLogin ? '立即注册' : '立即登录' ]]
+                    </a>
+                </p>
+            </form>
+        </div>
+
+        <!-- 主界面 -->
+        <div v-else class="main-container">
+            <header>
+                <h1>智能皮肤分析系统</h1>
+                <div class="user-info">
+                    <span>欢迎, [[ user.username ]]</span>
+                    <button @click="showProfile = true">个人资料</button>
+                    <button @click="logout">退出</button>
+                </div>
+            </header>
+
+            <!-- 个人资料模态框 -->
+            <div v-if="showProfile" class="modal">
+                <div class="modal-content">
+                    <h2>个人资料</h2>
+                    <form @submit.prevent="updateProfile">
+                        <div class="form-group">
+                            <label>年龄</label>
+                            <input type="number" v-model="profile.age">
+                        </div>
+                        <div class="form-group">
+                            <label>性别</label>
+                            <select v-model="profile.gender">
+                                <option value="">请选择</option>
+                                <option value="male">男</option>
+                                <option value="female">女</option>
+                                <option value="other">其他</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>肤质类型</label>
+                            <select v-model="profile.skin_type">
+                                <option value="">请选择</option>
+                                <option value="oily">油性</option>
+                                <option value="dry">干性</option>
+                                <option value="combination">混合性</option>
+                                <option value="sensitive">敏感性</option>
+                                <option value="normal">中性</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>皮肤问题</label>
+                            <textarea v-model="profile.concerns" rows="4"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit">保存</button>
+                            <button type="button" @click="showProfile = false">取消</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 相机视图 -->
+            <div class="camera-view" v-if="!showResult && !showHistory">
+                <video ref="video" autoplay playsinline></video>
+                <div class="camera-controls">
+                    <button @click="startCamera" v-if="!isCameraActive">开启相机</button>
+                    <button @click="stopCamera" v-if="isCameraActive">关闭相机</button>
+                    <button @click="captureImage" v-if="isCameraActive">拍照</button>
+                </div>
+            </div>
+
+            <!-- 结果视图 -->
+            <div class="result-view" v-if="showResult">
+                <h2>分析结果</h2>
+                <div class="result-image">
+                    <img :src="result.image" alt="分析结果">
+                </div>
+                <div class="result-details">
+                    <div class="score">
+                        <h3>皮肤评分</h3>
+                        <div class="score-value">[[ result.score ]]</div>
+                    </div>
+                    <div class="metrics">
+                        <div class="metric">
+                            <h4>水分</h4>
+                            <div class="progress-bar">
+                                <div class="progress" :style="{ width: result.moisture + '%' }"></div>
+                            </div>
+                            <span>[[ result.moisture ]]%</span>
+                        </div>
+                        <div class="metric">
+                            <h4>油分</h4>
+                            <div class="progress-bar">
+                                <div class="progress" :style="{ width: result.oil + '%' }"></div>
+                            </div>
+                            <span>[[ result.oil ]]%</span>
+                        </div>
+                        <div class="metric">
+                            <h4>敏感度</h4>
+                            <div class="progress-bar">
+                                <div class="progress" :style="{ width: result.sensitivity + '%' }"></div>
+                            </div>
+                            <span>[[ result.sensitivity ]]%</span>
+                        </div>
+                    </div>
+                    <div class="recommendations">
+                        <h4>护理建议</h4>
+                        <p>[[ result.recommendations ]]</p>
+                    </div>
+                </div>
+                <div class="result-actions">
+                    <button @click="showResult = false">返回相机</button>
+                    <button @click="showHistory = true">查看历史</button>
+                </div>
+            </div>
+
+            <!-- 历史记录视图 -->
+            <div class="history-view" v-if="showHistory">
+                <h2>历史记录</h2>
+                <div class="history-list">
+                    <div v-for="record in history" :key="record.id" class="history-item">
+                        <div class="history-date">[[ formatDate(record.created_at) ]]</div>
+                        <div class="history-score">评分: [[ record.score ]]</div>
+                        <div class="history-metrics">
+                            <span>水分: [[ record.moisture ]]%</span>
+                            <span>油分: [[ record.oil ]]%</span>
+                            <span>敏感度: [[ record.sensitivity ]]%</span>
+                        </div>
+                        <div class="history-recommendations">
+                            <p>[[ record.recommendations ]]</p>
+                        </div>
+                    </div>
+                </div>
+                <button @click="showHistory = false">返回相机</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html> 

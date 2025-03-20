@@ -1,0 +1,13 @@
+{
+  "categories": [
+    "normal",
+    "dry",
+    "oily"
+  ],
+  "total_images": 6,
+  "category_counts": {
+    "normal": 2,
+    "dry": 2,
+    "oily": 2
+  }
+}
